@@ -32,14 +32,29 @@ jobs:
           WAIT_PORTS: 8080,8070,8060,8050
 
       # TODO setup variant, service and port
+      - uses: actions/setup-go@v4
+        with:
+          go-version: '1.27'
+
+      - name: Run unit tests loyalty
+        working-directory: ./project/loyalty-service
+        run: pwd && go test -v -short ./service/...
+
+      - name: Run unit tests payment
+        working-directory: ./project/payment-service
+        run: go test -v -short ./service/...
+
+      - name: Run unit tests reservation
+        working-directory: ./project/reservation-service
+        run: go test -v -short ./service/...
 
       - name: Run API Tests
         timeout-minutes: 5
         run: ./scripts/test-script.sh
         env:
-          VARIANT: <variant>
-          SERVICE_NAME: <your service name>
-          PORT_NUMBER: <port number>
+          VARIANT: "2"
+          SERVICE_NAME: "gateway"
+          PORT_NUMBER: "8080"
 
       - uses: education/autograding@v1
         id: autograder

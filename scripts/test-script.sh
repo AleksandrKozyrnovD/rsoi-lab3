@@ -2,7 +2,7 @@
 
 set -e
 
-variant=${1:-${VARIANT}}
+variant=${2:-${VARIANT}}
 service=${2:-${SERVICE_NAME}}
 port=${3:-${PORT_NUMBER}}
 
