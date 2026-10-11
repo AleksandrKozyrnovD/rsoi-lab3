@@ -52,7 +52,7 @@ jobs:
         timeout-minutes: 5
         run: ./scripts/test-script.sh
         env:
-          VARIANT: "2"
+          VARIANT: "v2"
           SERVICE_NAME: "gateway"
           PORT_NUMBER: "8080"
 
