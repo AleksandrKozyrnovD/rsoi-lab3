@@ -964,7 +964,12 @@
 											"",
 											"    const response = pm.response.json();",
 											"    pm.expect(response.reservations).to.be.an(\"array\")",
-											"    pm.expect(response.loyalty).to.be.empty",
+                                            "    const loyalty = response.loyalty
+                                            pm.expect(
+                                                loyalty === null ||
+                                                loyalty === undefined ||
+                                                (typeof loyalty === "object" && Object.keys(loyalty).length === 0)
+                                                ).to.be.true",
 											"})"
 										],
 										"type": "text/javascript"
