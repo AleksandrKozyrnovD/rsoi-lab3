@@ -954,24 +954,25 @@
 							"event": [
 								{
 									"listen": "test",
-									"script": {
-										"exec": [
-											"const moment = require(\"moment\")",
-											"",
-											"pm.test(\"Получение информации о пользователе\", () => {",
-											"    pm.response.to.have.status(200)",
-											"    pm.expect(pm.response.headers.get(\"Content-Type\")).to.contains(\"application/json\");",
-											"",
-											"    const response = pm.response.json();",
-											"    pm.expect(response.reservations).to.be.an(\"array\")",
-                                            "    const loyalty = response.loyalty
-                                            pm.expect(
-                                                loyalty === null ||
-                                                loyalty === undefined ||
-                                                (typeof loyalty === "object" && Object.keys(loyalty).length === 0)
-                                                ).to.be.true",
-											"})"
-										],
+                                    "script": {
+                                        "exec": [
+                                            "const moment = require(\"moment\")",
+                                            "",
+                                            "pm.test(\"Получение информации о пользователе\", () => {",
+                                                "    pm.response.to.have.status(200)",
+                                                "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.contains(\"application/json\");",
+                                                "",
+                                                "    const response = pm.response.json();",
+                                                "    pm.expect(response.reservations).to.be.an(\"array\")",
+                                                "",
+                                                "    const loyalty = response.loyalty",
+                                                "    pm.expect(",
+                                                    "        loyalty === null ||",
+                                                    "        loyalty === undefined ||",
+                                                    "        (typeof loyalty === \"object\" && Object.keys(loyalty).length === 0)",
+                                                    "    ).to.be.true",
+                                                    "})"
+                                        ],
 										"type": "text/javascript"
 									}
 								}
