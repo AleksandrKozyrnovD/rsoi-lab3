@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -40,13 +41,17 @@ type V1 struct {
 	loyalty      LoyaltyService
 	reservations ReservationService
 	payments     PaymentService
+
+	mu                sync.Mutex
+	pendingDecrements map[string]int // username -> сколько декрементов не применилось
 }
 
 func NewV1(loyalty LoyaltyService, reservations ReservationService, payments PaymentService) *V1 {
 	return &V1{
-		loyalty:      loyalty,
-		reservations: reservations,
-		payments:     payments,
+		loyalty:           loyalty,
+		reservations:      reservations,
+		payments:          payments,
+		pendingDecrements: make(map[string]int),
 	}
 }
 
@@ -76,6 +81,8 @@ func defaultLoyalty() *models.LoyaltyInfoResponse {
 
 // getLoyalty тянет лояльность; если сервис отдаёт ErrNotFound — создаёт запись.
 func (a *V1) getLoyalty(username string) (*models.LoyaltyInfoResponse, error) {
+	a.flushPendingDecrements(username)
+
 	loyalty, err := a.loyalty.GetLoyalty(username)
 	if err == nil {
 		return loyalty, nil
@@ -119,6 +126,41 @@ func writeValidationError(c *gin.Context, errs ...models.ErrorDescription) {
 		Message: "Invalid data",
 		Errors:  errs,
 	})
+}
+
+func (a *V1) queueDecrement(username string) {
+	a.mu.Lock()
+	a.pendingDecrements[username]++
+	a.mu.Unlock()
+}
+
+// flushPendingDecrements пытается применить накопленные декременты.
+// Best-effort: при ошибке оставляет остаток на следующий раз.
+func (a *V1) flushPendingDecrements(username string) {
+	a.mu.Lock()
+	n := a.pendingDecrements[username]
+	a.mu.Unlock()
+	if n == 0 {
+		return
+	}
+
+	applied := 0
+	for i := 0; i < n; i++ {
+		if err := a.loyalty.DecrementReservations(username); err != nil {
+			break
+		}
+		applied++
+	}
+	if applied == 0 {
+		return
+	}
+
+	a.mu.Lock()
+	a.pendingDecrements[username] -= applied
+	if a.pendingDecrements[username] <= 0 {
+		delete(a.pendingDecrements, username)
+	}
+	a.mu.Unlock()
 }
 
 // ============================================================
@@ -186,10 +228,11 @@ func (a *V1) HandleGetMe(c *gin.Context) {
 		}
 	}
 
-	loyalty, err := a.getLoyalty(username)
+	var loyalty *models.LoyaltyInfoResponse
+	loyalty, err = a.getLoyalty(username)
 	if err != nil {
 		if errors.Is(err, ErrServiceUnavailable) {
-			loyalty = defaultLoyalty()
+			loyalty = nil // пусто, но 200
 		} else {
 			c.JSON(http.StatusInternalServerError, models.ErrorResponse{Message: err.Error()})
 			return
@@ -198,7 +241,7 @@ func (a *V1) HandleGetMe(c *gin.Context) {
 
 	c.JSON(http.StatusOK, models.MeResponse{
 		Reservations: reservations,
-		Loyalty:      *loyalty,
+		Loyalty:      loyalty,
 	})
 }
 
@@ -265,13 +308,13 @@ func (a *V1) HandleCreateReservation(c *gin.Context) {
 	loyalty, err := a.getLoyalty(username)
 	if err != nil {
 		if errors.Is(err, ErrServiceUnavailable) {
-			loyalty = defaultLoyalty()
-		} else {
-			c.JSON(http.StatusInternalServerError, models.ErrorResponse{Message: err.Error()})
+			c.JSON(http.StatusServiceUnavailable,
+				models.ErrorResponse{Message: "Loyalty Service unavailable"})
 			return
 		}
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Message: err.Error()})
+		return
 	}
-
 	// 2) отель — critical source
 	hotel, err := a.findHotel(req.HotelUid)
 	if err != nil {
@@ -415,9 +458,8 @@ func (a *V1) HandleCancelReservation(c *gin.Context) {
 	// 2) декремент лояльности — critical for the compound operation;
 	//    при ошибке откатываем отмену брони.
 	if err := a.loyalty.DecrementReservations(username); err != nil {
-		_ = a.reservations.UncancelReservation(username, reservationUid)
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Message: "failed to update loyalty, operation rolled back"})
-		return
+		// loyalty недоступен → запоминаем, применим при следующем успешном контакте
+		a.queueDecrement(username)
 	}
 
 	c.Status(http.StatusNoContent)
@@ -426,7 +468,6 @@ func (a *V1) HandleCancelReservation(c *gin.Context) {
 // ============================================================
 // GET /api/v1/loyalty
 // ============================================================
-
 func (a *V1) HandleGetLoyalty(c *gin.Context) {
 	username, ok := getUserName(c)
 	if !ok {
@@ -436,12 +477,12 @@ func (a *V1) HandleGetLoyalty(c *gin.Context) {
 	loyalty, err := a.getLoyalty(username)
 	if err != nil {
 		if errors.Is(err, ErrServiceUnavailable) {
-			// Fallback: default Bronze loyalty.
-			loyalty = defaultLoyalty()
-		} else {
-			c.JSON(http.StatusInternalServerError, models.ErrorResponse{Message: err.Error()})
+			c.JSON(http.StatusServiceUnavailable,
+				models.ErrorResponse{Message: "Loyalty Service unavailable"})
 			return
 		}
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Message: err.Error()})
+		return
 	}
 
 	c.JSON(http.StatusOK, loyalty)

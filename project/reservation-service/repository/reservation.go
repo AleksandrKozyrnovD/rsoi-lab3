@@ -76,7 +76,7 @@ func (r *reservationRepository) Cancel(username, reservationUid string) (*models
 		Where("username = ? AND reservation_uid = ?", username, reservationUid).
 		Updates(map[string]interface{}{
 			"status":         models.ReservationStatusCanceled,
-			"payment_status": models.PaymentStatusReversed,
+			"payment_status": models.PaymentStatusCanceled,
 		})
 
 	if result.Error != nil {

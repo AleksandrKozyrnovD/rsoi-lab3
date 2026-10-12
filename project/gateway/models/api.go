@@ -120,7 +120,7 @@ type CreateReservationResponse struct {
 // MeResponse — ответ /api/v1/me
 type MeResponse struct {
 	Reservations []ReservationResponse `json:"reservations"`
-	Loyalty      LoyaltyInfoResponse   `json:"loyalty"`
+	Loyalty      *LoyaltyInfoResponse   `json:"loyalty"`
 }
 
 // ---------- константы статусов ----------
