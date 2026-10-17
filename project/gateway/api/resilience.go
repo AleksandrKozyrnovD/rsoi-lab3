@@ -3,13 +3,9 @@ package api
 import (
 	"context"
 	"time"
-
 	"github.com/cenkalti/backoff/v4"
-	"github.com/sony/gobreaker/v2"
 )
 
-// RetryConfig holds retry with exponential backoff settings.
-// Every parameter is configurable.
 type RetryConfig struct {
 	MaxRetries          int           // number of retry attempts (not counting the initial attempt)
 	InitialInterval     time.Duration // initial backoff interval
@@ -19,7 +15,6 @@ type RetryConfig struct {
 	MaxElapsedTime      time.Duration // total time budget for retries (0 = infinite)
 }
 
-// DefaultRetryConfig returns sensible defaults for retry with exponential backoff.
 func DefaultRetryConfig() RetryConfig {
 	return RetryConfig{
 		MaxRetries:          3,
@@ -31,7 +26,6 @@ func DefaultRetryConfig() RetryConfig {
 	}
 }
 
-// CircuitBreakerConfig holds circuit breaker settings.
 type CircuitBreakerConfig struct {
 	MaxRequests      uint32        // max requests allowed in half-open state
 	Interval         time.Duration // cyclic period for clearing counts in closed state
@@ -39,7 +33,6 @@ type CircuitBreakerConfig struct {
 	FailureThreshold uint32        // consecutive failures to trip the breaker
 }
 
-// DefaultCircuitBreakerConfig returns sensible defaults for the circuit breaker.
 func DefaultCircuitBreakerConfig() CircuitBreakerConfig {
 	return CircuitBreakerConfig{
 		MaxRequests:      3,
@@ -49,20 +42,18 @@ func DefaultCircuitBreakerConfig() CircuitBreakerConfig {
 	}
 }
 
-// newCircuitBreaker creates a typed circuit breaker with the given settings.
-func newCircuitBreaker[T any](name string, cfg CircuitBreakerConfig) *gobreaker.CircuitBreaker[T] {
-	return gobreaker.NewCircuitBreaker[T](gobreaker.Settings{
+func newCircuitBreaker[T any](name string, cfg CircuitBreakerConfig) *CircuitBreaker[T] {
+	return NewCircuitBreaker[T](Settings{
 		Name:        name,
 		MaxRequests: cfg.MaxRequests,
 		Interval:    cfg.Interval,
 		Timeout:     cfg.Timeout,
-		ReadyToTrip: func(counts gobreaker.Counts) bool {
+		ReadyToTrip: func(counts Counts) bool {
 			return counts.ConsecutiveFailures >= cfg.FailureThreshold
 		},
 	})
 }
 
-// limitedBackOff wraps an exponential backoff and stops after MaxRetries.
 type limitedBackOff struct {
 	backoff.BackOff
 	maxRetries int
@@ -92,8 +83,6 @@ func (l *limitedBackOff) Reset() {
 	l.BackOff.Reset()
 }
 
-// retryExecute runs fn with retry + exponential backoff.
-// fn should return backoff.Permanent(err) for non-retryable errors.
 func retryExecute(ctx context.Context, cfg RetryConfig, fn func() error) error {
 	b := newLimitedBackOff(cfg)
 	return backoff.Retry(fn, backoff.WithContext(b, ctx))

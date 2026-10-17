@@ -12,14 +12,10 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
-	"github.com/sony/gobreaker/v2"
 
 	"gateway/models"
 )
 
-// ============================================================
-// Общие ошибки, которые клиенты возвращают наружу
-// ============================================================
 
 var (
 	ErrNotFound           = errors.New("not found")
@@ -27,9 +23,6 @@ var (
 	ErrServiceUnavailable = errors.New("service unavailable")
 )
 
-// ============================================================
-// ClientOption — функциональные опции для настройки клиентов
-// ============================================================
 
 type ClientOption func(*serviceClient)
 
@@ -48,16 +41,13 @@ func WithCircuitBreakerConfig(cfg CircuitBreakerConfig) ClientOption {
 	}
 }
 
-// ============================================================
 // serviceClient — обёртка над http.Client с baseURL, CB и retry
-// ============================================================
-
 type serviceClient struct {
 	baseURL  string
 	http     *http.Client
 	retryCfg RetryConfig
 	cbCfg    CircuitBreakerConfig
-	cb       *gobreaker.CircuitBreaker[any]
+	cb       *CircuitBreaker[any]
 }
 
 func newServiceClient(baseURL string) *serviceClient {
@@ -164,10 +154,7 @@ func (s *serviceClient) forwardRequest(
 	return s.forwardRequestRaw(method, path, body, headers, out)
 }
 
-// ============================================================
 // LoyaltyService
-// ============================================================
-
 type LoyaltyClient struct {
 	svc *serviceClient
 }
@@ -258,10 +245,7 @@ func (l *LoyaltyClient) DecrementReservations(username string) error {
 	return nil
 }
 
-// ============================================================
 // ReservationService
-// ============================================================
-
 type ReservationClient struct {
 	svc *serviceClient
 }
